@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -47,15 +47,25 @@ const farmerSchema = new mongoose.Schema({
 const Landlord = mongoose.model('Landlord', landlordSchema);
 const Farmer = mongoose.model('Farmer', farmerSchema);
 
-// Resend Email Configuration
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Brevo (Sendinblue) Email Configuration
+const transporter = nodemailer.createTransport({
+  host: process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com',
+  port: parseInt(process.env.BREVO_SMTP_PORT || '587'),
+  secure: false, // true for 465, false for other ports
+  auth: {
+    user: process.env.BREVO_SMTP_USER || '9f1295001@smtp-brevo.com',
+    pass: process.env.BREVO_SMTP_PASSWORD || process.env.BREVO_API_KEY
+  }
+});
 
 // Verify email configuration
-if (process.env.RESEND_API_KEY) {
-  console.log('Resend email service configured');
-} else {
-  console.log('Warning: RESEND_API_KEY not set. Email functionality will not work.');
-}
+transporter.verify((error, success) => {
+  if (error) {
+    console.log('Brevo email configuration error:', error);
+  } else {
+    console.log('Brevo email server is ready to send messages');
+  }
+});
 
 // Route for Landlord Post
 app.post('/api/landlord', async (req, res) => {
@@ -90,33 +100,29 @@ app.post('/api/landlord', async (req, res) => {
 // Route for Farmer Interest (match and notify)
 app.post('/api/farmer', async (req, res) => {
   const { county, offered_price, email } = req.body;
-  
-  // Validation
+
   if (!county || !email || !offered_price) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
-  
+
   try {
-    // Save farmer interest
     const farmer = new Farmer({
       county,
       offered_price,
-      email
+      email,
     });
-    
-    const savedFarmer = await farmer.save();
 
-    // Match landlords
+    await farmer.save();
+
     const landlords = await Landlord.find({
-      county: county,
-      asking_price: { $lte: offered_price }
+      county,
+      asking_price: { $lte: offered_price },
     });
 
-    // Send notifications to matched landlords
     if (landlords.length > 0) {
-      const emailPromises = landlords.map(landlord => {
-        return resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'FarmRent AI <onboarding@resend.dev>',
+      const emailPromises = landlords.map((landlord) =>
+        transporter.sendMail({
+          from: process.env.BREVO_FROM_EMAIL || 'FarmRent AI <noreply@farmrent.ai>',
           to: landlord.email,
           subject: 'Farmer Interest in Your Land - FarmRent AI',
           html: `
@@ -131,23 +137,25 @@ app.post('/api/farmer', async (req, res) => {
               <p style="color: #666; font-size: 14px;">This is an automated notification from FarmRent AI.</p>
             </div>
           `,
+          text: `A farmer is willing to pay $${offered_price}/acre for land in ${county}. Contact them at ${email}.`
         }).catch(error => {
           console.error(`Error sending email to ${landlord.email}:`, error);
-        });
-      });
-      
-      Promise.all(emailPromises).then(() => {
-        console.log(`Sent ${landlords.length} notification(s) to landlords`);
-      });
+        })
+      );
+
+      // ✅ THIS IS CRITICAL - Wait for all emails to be sent
+      await Promise.all(emailPromises);
+
+      console.log(`Sent ${landlords.length} email(s) to landlords`);
     }
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Farmer interest submitted successfully',
-      matches: landlords.length 
+      matches: landlords.length,
     });
   } catch (err) {
-    console.error('Database error:', err);
+    console.error('Error:', err);
     res.status(500).json({ error: err.message });
   }
 });
