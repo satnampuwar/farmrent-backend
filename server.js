@@ -28,10 +28,10 @@ mongoose.connect(mongoURI, {
 
 // Mongoose Schemas
 const landlordSchema = new mongoose.Schema({
-  county: { type: String, required: true },
+  county: { type: String, default: null },
   spi: { type: Number, default: null },
   acres: { type: Number, default: null },
-  asking_price: { type: Number, required: true },
+  asking_price: { type: Number, default: null },
   email: { type: String, required: true },
   created_at: { type: Date, default: Date.now }
 });
@@ -70,8 +70,8 @@ app.post('/api/landlord', async (req, res) => {
   const { county, spi, acres, asking_price, email } = req.body;
   
   // Validation
-  if (!county || !email || !asking_price) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
   }
   
   try {
@@ -114,10 +114,10 @@ app.post('/api/farmer', async (req, res) => {
     
     const savedFarmer = await farmer.save();
 
-    // Match landlords
+    // Match landlords (only those with county and asking_price set)
     const landlords = await Landlord.find({
       county: county,
-      asking_price: { $lte: offered_price }
+      asking_price: { $lte: offered_price, $ne: null }
     });
 
     // Send notifications to matched landlords
@@ -164,18 +164,42 @@ app.post('/api/farmer', async (req, res) => {
 });
 
 // Route for signup (newsletter)
-app.post('/api/signup', (req, res) => {
+app.post('/api/signup', async (req, res) => {
   const { email } = req.body;
   
   if (!email) {
     return res.status(400).json({ error: 'Email is required' });
   }
   
-  // You can add a signups table if needed
-  res.json({ 
-    success: true, 
-    message: 'Thank you for signing up!' 
-  });
+  try {
+    // Check if email already exists in landlord table
+    const existingLandlord = await Landlord.findOne({ email });
+    
+    if (existingLandlord) {
+      return res.json({ 
+        success: true, 
+        message: 'Thank you for signing up! You are already registered.' 
+      });
+    }
+    
+    // Save signup email to landlord table
+    const landlord = new Landlord({
+      email,
+      county: null,
+      spi: null,
+      acres: null,
+      asking_price: null
+    });
+    
+    const savedLandlord = await landlord.save();
+    res.json({ 
+      success: true, 
+      message: 'Thank you for signing up!' 
+    });
+  } catch (err) {
+    console.error('Database error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Health check route
