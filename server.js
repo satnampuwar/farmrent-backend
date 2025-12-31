@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -47,23 +47,15 @@ const farmerSchema = new mongoose.Schema({
 const Landlord = mongoose.model('Landlord', landlordSchema);
 const Farmer = mongoose.model('Farmer', farmerSchema);
 
-// Nodemailer Transport Configuration
-const transporter = nodemailer.createTransport({
-  service: process.env.EMAIL_SERVICE || 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'yourgmail@gmail.com',
-    pass: process.env.EMAIL_PASSWORD || 'your-app-password'
-  }
-});
+// Resend Email Configuration
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Verify email configuration
-transporter.verify((error, success) => {
-  if (error) {
-    console.log('Email configuration error:', error);
-  } else {
-    console.log('Email server is ready to send messages');
-  }
-});
+if (process.env.RESEND_API_KEY) {
+  console.log('Resend email service configured');
+} else {
+  console.log('Warning: RESEND_API_KEY not set. Email functionality will not work.');
+}
 
 // Route for Landlord Post
 app.post('/api/landlord', async (req, res) => {
@@ -123,8 +115,8 @@ app.post('/api/farmer', async (req, res) => {
     // Send notifications to matched landlords
     if (landlords.length > 0) {
       const emailPromises = landlords.map(landlord => {
-        const mailOptions = {
-          from: process.env.EMAIL_USER || 'yourgmail@gmail.com',
+        return resend.emails.send({
+          from: process.env.RESEND_FROM_EMAIL || 'FarmRent AI <onboarding@resend.dev>',
           to: landlord.email,
           subject: 'Farmer Interest in Your Land - FarmRent AI',
           html: `
@@ -139,10 +131,7 @@ app.post('/api/farmer', async (req, res) => {
               <p style="color: #666; font-size: 14px;">This is an automated notification from FarmRent AI.</p>
             </div>
           `,
-          text: `A farmer is willing to pay $${offered_price}/acre for land in ${county}. Contact them at ${email}.`
-        };
-        
-        return transporter.sendMail(mailOptions).catch(error => {
+        }).catch(error => {
           console.error(`Error sending email to ${landlord.email}:`, error);
         });
       });
