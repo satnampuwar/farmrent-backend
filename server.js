@@ -15,16 +15,44 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // MongoDB Connection
 const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/farmrent';
+
+// Enhanced MongoDB connection with proper timeout and error handling
 mongoose.connect(mongoURI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 30000, // 30 seconds timeout for server selection
+  socketTimeoutMS: 45000, // 45 seconds timeout for socket operations
+  connectTimeoutMS: 30000, // 30 seconds timeout for initial connection
+  maxPoolSize: 10, // Maintain up to 10 socket connections
+  minPoolSize: 2, // Maintain at least 2 socket connections
+  retryWrites: true,
+  w: 'majority'
 })
 .then(() => {
-  console.log('Connected to MongoDB');
+  console.log('Connected to MongoDB successfully');
+  console.log(`Database: ${mongoose.connection.name}`);
 })
 .catch((err) => {
   console.error('Error connecting to MongoDB:', err.message);
+  console.error('Full error:', err);
+  // Don't exit process, but log error for monitoring
 });
+
+// Handle connection events
+mongoose.connection.on('connected', () => {
+  console.log('Mongoose connected to MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('Mongoose connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('Mongoose disconnected from MongoDB');
+});
+
+// Helper function to check if MongoDB is connected
+const isConnected = () => {
+  return mongoose.connection.readyState === 1; // 1 = connected
+};
 
 // Mongoose Schemas
 const landlordSchema = new mongoose.Schema({
@@ -76,6 +104,14 @@ app.post('/api/landlord', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
   
+  // Check MongoDB connection
+  if (!isConnected()) {
+    console.error('MongoDB not connected. Connection state:', mongoose.connection.readyState);
+    return res.status(503).json({ 
+      error: 'Database connection unavailable. Please try again later.' 
+    });
+  }
+  
   try {
     const landlord = new Landlord({
       county,
@@ -93,6 +129,10 @@ app.post('/api/landlord', async (req, res) => {
     });
   } catch (err) {
     console.error('Database error:', err);
+    // Handle specific MongoDB errors
+    if (err.name === 'MongoServerError' || err.name === 'MongoNetworkError') {
+      return res.status(503).json({ error: 'Database connection error. Please try again later.' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -103,6 +143,14 @@ app.post('/api/farmer', async (req, res) => {
 
   if (!county || !email || !offered_price) {
     return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Check MongoDB connection
+  if (!isConnected()) {
+    console.error('MongoDB not connected. Connection state:', mongoose.connection.readyState);
+    return res.status(503).json({ 
+      error: 'Database connection unavailable. Please try again later.' 
+    });
   }
 
   try {
@@ -156,6 +204,10 @@ app.post('/api/farmer', async (req, res) => {
     });
   } catch (err) {
     console.error('Error:', err);
+    // Handle specific MongoDB errors
+    if (err.name === 'MongoServerError' || err.name === 'MongoNetworkError') {
+      return res.status(503).json({ error: 'Database connection error. Please try again later.' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
