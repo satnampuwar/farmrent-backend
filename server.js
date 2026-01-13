@@ -13,28 +13,44 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// MongoDB Connection
+// MongoDB Connection - Optimized for serverless (Vercel)
 const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/farmrent';
 
-// Enhanced MongoDB connection with proper timeout and error handling
-mongoose.connect(mongoURI, {
-  serverSelectionTimeoutMS: 30000, // 30 seconds timeout for server selection
-  socketTimeoutMS: 45000, // 45 seconds timeout for socket operations
-  connectTimeoutMS: 30000, // 30 seconds timeout for initial connection
-  maxPoolSize: 10, // Maintain up to 10 socket connections
-  minPoolSize: 2, // Maintain at least 2 socket connections
-  retryWrites: true,
-  w: 'majority'
-})
-.then(() => {
-  console.log('Connected to MongoDB successfully');
-  console.log(`Database: ${mongoose.connection.name}`);
-})
-.catch((err) => {
-  console.error('Error connecting to MongoDB:', err.message);
-  console.error('Full error:', err);
-  // Don't exit process, but log error for monitoring
-});
+// Cache the connection to reuse in serverless environments
+let cachedConnection = null;
+
+// Enhanced MongoDB connection with proper timeout and error handling for serverless
+const connectDB = async () => {
+  // Return cached connection if available and connected
+  if (cachedConnection && mongoose.connection.readyState === 1) {
+    return cachedConnection;
+  }
+
+  // If connection exists but is disconnected, close it first
+  if (cachedConnection && mongoose.connection.readyState !== 1) {
+    await mongoose.connection.close().catch(() => {});
+  }
+
+  try {
+    cachedConnection = await mongoose.connect(mongoURI, {
+      serverSelectionTimeoutMS: 10000, // 10 seconds timeout for server selection (shorter for serverless)
+      socketTimeoutMS: 45000, // 45 seconds timeout for socket operations
+      connectTimeoutMS: 10000, // 10 seconds timeout for initial connection
+      maxPoolSize: 1, // Reduced pool size for serverless (1 connection per function)
+      minPoolSize: 0, // No minimum pool for serverless
+      retryWrites: true,
+      w: 'majority'
+    });
+
+    console.log('Connected to MongoDB successfully');
+    console.log(`Database: ${mongoose.connection.name}`);
+    return cachedConnection;
+  } catch (err) {
+    console.error('Error connecting to MongoDB:', err.message);
+    console.error('Full error:', err);
+    throw err;
+  }
+};
 
 // Handle connection events
 mongoose.connection.on('connected', () => {
@@ -43,16 +59,18 @@ mongoose.connection.on('connected', () => {
 
 mongoose.connection.on('error', (err) => {
   console.error('Mongoose connection error:', err);
+  cachedConnection = null; // Clear cache on error
 });
 
 mongoose.connection.on('disconnected', () => {
   console.warn('Mongoose disconnected from MongoDB');
+  cachedConnection = null; // Clear cache on disconnect
 });
 
-// Helper function to check if MongoDB is connected
-const isConnected = () => {
-  return mongoose.connection.readyState === 1; // 1 = connected
-};
+// Initialize connection (non-blocking)
+connectDB().catch(err => {
+  console.error('Initial MongoDB connection failed:', err);
+});
 
 // Mongoose Schemas
 const landlordSchema = new mongoose.Schema({
@@ -104,9 +122,11 @@ app.post('/api/landlord', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
   
-  // Check MongoDB connection
-  if (!isConnected()) {
-    console.error('MongoDB not connected. Connection state:', mongoose.connection.readyState);
+  // Ensure MongoDB connection before proceeding
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error('Failed to connect to MongoDB:', err);
     return res.status(503).json({ 
       error: 'Database connection unavailable. Please try again later.' 
     });
@@ -145,9 +165,11 @@ app.post('/api/farmer', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  // Check MongoDB connection
-  if (!isConnected()) {
-    console.error('MongoDB not connected. Connection state:', mongoose.connection.readyState);
+  // Ensure MongoDB connection before proceeding
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error('Failed to connect to MongoDB:', err);
     return res.status(503).json({ 
       error: 'Database connection unavailable. Please try again later.' 
     });
@@ -238,20 +260,26 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(port, () => {
-  console.log(`FarmRent API server running on port ${port}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Export app for Vercel serverless (required)
+module.exports = app;
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  try {
-    await mongoose.connection.close();
-    console.log('MongoDB connection closed');
-    process.exit(0);
-  } catch (err) {
-    console.error('Error closing database:', err.message);
-    process.exit(1);
-  }
-});
+// Start server for local development
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`FarmRent API server running on port ${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+
+  // Graceful shutdown for local development
+  process.on('SIGINT', async () => {
+    try {
+      await mongoose.connection.close();
+      console.log('MongoDB connection closed');
+      process.exit(0);
+    } catch (err) {
+      console.error('Error closing database:', err.message);
+      process.exit(1);
+    }
+  });
+}
 
