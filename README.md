@@ -33,10 +33,15 @@ Edit `.env` and add your configuration:
 PORT=3001
 NODE_ENV=development
 MONGODB_URI=mongodb://localhost:27017/farmrent
+JWT_SECRET=your-super-secret-jwt-key-here-minimum-32-characters
+DEFAULT_ADMIN_EMAIL=admin@farmrent.ai
+DEFAULT_ADMIN_PASSWORD=admin123
 EMAIL_SERVICE=gmail
 EMAIL_USER=yourgmail@gmail.com
 EMAIL_PASSWORD=your-app-password
 ```
+
+**Note:** The server automatically creates a super admin on startup if one doesn't exist. You can configure the default credentials using `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` environment variables. **Important:** Change the default password after first login in production!
 
 **Note:** For MongoDB Atlas (cloud), use:
 ```env
@@ -158,6 +163,181 @@ Health check endpoint.
 }
 ```
 
+## Admin Panel API Endpoints
+
+All admin endpoints require JWT authentication via Bearer token in the Authorization header (except login).
+
+### POST `/api/admin/login`
+
+Admin login endpoint.
+
+**Request Body:**
+```json
+{
+  "email": "admin@example.com",
+  "password": "adminpassword"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "admin": {
+    "id": "admin_123",
+    "email": "admin@example.com"
+  }
+}
+```
+
+### GET `/api/admin/signups`
+
+Get all newsletter signups (requires authentication). Supports pagination.
+
+**Headers:**
+```
+Authorization: Bearer <jwt_token>
+```
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 10)
+
+**Example:**
+```
+GET /api/admin/signups?page=1&limit=20
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "1",
+      "email": "user@example.com",
+      "createdAt": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 150,
+    "totalPages": 15,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+### GET `/api/admin/landlords`
+
+Get all landlord posts (requires authentication). Supports pagination.
+
+**Headers:**
+```
+Authorization: Bearer <jwt_token>
+```
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 10)
+
+**Example:**
+```
+GET /api/admin/landlords?page=2&limit=25
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "1",
+      "county": "Cook",
+      "spi": 124,
+      "acres": 100,
+      "asking_price": 250,
+      "email": "landlord@example.com",
+      "createdAt": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 45,
+    "totalPages": 5,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+### GET `/api/admin/farmers`
+
+Get all farmer interests (requires authentication). Supports pagination.
+
+**Headers:**
+```
+Authorization: Bearer <jwt_token>
+```
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 10)
+
+**Example:**
+```
+GET /api/admin/farmers?page=1&limit=50
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "1",
+      "county": "Cook",
+      "offered_price": 250,
+      "email": "farmer@example.com",
+      "createdAt": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 78,
+    "totalPages": 8,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+### GET `/api/admin/stats`
+
+Get dashboard statistics (requires authentication).
+
+**Headers:**
+```
+Authorization: Bearer <jwt_token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "totalSignups": 150,
+    "totalLandlords": 45,
+    "totalFarmers": 78
+  }
+}
+```
+
 ## Database
 
 The application uses MongoDB to store data. Make sure MongoDB is installed and running on your system, or use MongoDB Atlas (cloud).
@@ -179,12 +359,37 @@ The application uses MongoDB to store data. Make sure MongoDB is installed and r
 
 ### MongoDB Collections
 
-The database contains two collections:
+The database contains four collections:
 
 - `landlords`: Stores landlord posts with county, SPI, acres, asking price, and email
 - `farmers`: Stores farmer interests with county, offered price, and email
+- `signups`: Stores newsletter signup emails
+- `admins`: Stores admin user accounts (email and hashed password)
 
 Collections are automatically created when data is first inserted.
+
+### Creating an Admin User
+
+**Automatic Super Admin Creation:**
+The server automatically creates a super admin when it starts if one doesn't exist. The default credentials are:
+- Email: `admin@farmrent.ai` (or set via `DEFAULT_ADMIN_EMAIL`)
+- Password: `admin123` (or set via `DEFAULT_ADMIN_PASSWORD`)
+
+**Manual Admin Creation (Optional):**
+To manually create additional admin users, use the provided script:
+
+```bash
+node create-admin.js <email> <password>
+```
+
+Example:
+```bash
+node create-admin.js admin@example.com mypassword123
+```
+
+**Important:** 
+- Make sure to set a strong `JWT_SECRET` in your `.env` file for production
+- Change the default admin password after first login in production environments
 
 ## Email Notifications
 
@@ -202,6 +407,38 @@ REACT_APP_API_URL=http://localhost:3001
 ```
 
 Or update the API_BASE_URL in the React components if you're using a different backend URL.
+
+## Project Structure
+
+```
+farmrent-backend/
+├── config/
+│   └── database.js          # MongoDB connection configuration
+├── controllers/
+│   ├── adminController.js    # Admin route handlers
+│   ├── farmerController.js   # Farmer route handlers
+│   ├── landlordController.js # Landlord route handlers
+│   └── signupController.js   # Signup route handlers
+├── middleware/
+│   └── auth.js              # JWT authentication middleware
+├── models/
+│   ├── Admin.js             # Admin model
+│   ├── Farmer.js            # Farmer model
+│   ├── Landlord.js          # Landlord model
+│   └── Signup.js            # Signup model
+├── routes/
+│   ├── adminRoutes.js       # Admin API routes
+│   └── publicRoutes.js      # Public API routes
+├── services/
+│   ├── adminService.js      # Admin business logic (with pagination)
+│   ├── farmerService.js     # Farmer business logic
+│   ├── landlordService.js   # Landlord business logic
+│   └── signupService.js     # Signup business logic
+├── utils/
+│   └── initAdmin.js         # Super admin initialization utility
+├── server.js                # Main server file
+└── package.json
+```
 
 ## Production Deployment
 
