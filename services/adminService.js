@@ -2,7 +2,6 @@ const Signup = require('../models/Signup');
 const Landlord = require('../models/Landlord');
 const Farmer = require('../models/Farmer');
 const Admin = require('../models/Admin');
-const { connectDB } = require('../config/database');
 
 /**
  * Get paginated signups
@@ -11,8 +10,7 @@ const { connectDB } = require('../config/database');
  * @returns {Promise<Object>} Paginated signups data
  */
 const getSignups = async (page = 1, limit = 10) => {
-  await connectDB();
-  
+  // Connection is already established at app startup, no need to reconnect
   const pageNum = parseInt(page) || 1;
   const limitNum = parseInt(limit) || 10;
   const skip = (pageNum - 1) * limitNum;
@@ -54,8 +52,7 @@ const getSignups = async (page = 1, limit = 10) => {
  * @returns {Promise<Object>} Paginated landlords data
  */
 const getLandlords = async (page = 1, limit = 10) => {
-  await connectDB();
-  
+  // Connection is already established at app startup, no need to reconnect
   const pageNum = parseInt(page) || 1;
   const limitNum = parseInt(limit) || 10;
   const skip = (pageNum - 1) * limitNum;
@@ -103,8 +100,7 @@ const getLandlords = async (page = 1, limit = 10) => {
  * @returns {Promise<Object>} Paginated farmers data
  */
 const getFarmers = async (page = 1, limit = 10) => {
-  await connectDB();
-  
+  // Connection is already established at app startup, no need to reconnect
   const pageNum = parseInt(page) || 1;
   const limitNum = parseInt(limit) || 10;
   const skip = (pageNum - 1) * limitNum;
@@ -148,8 +144,7 @@ const getFarmers = async (page = 1, limit = 10) => {
  * @returns {Promise<Object>} Statistics data
  */
 const getStats = async () => {
-  await connectDB();
-  
+  // Connection is already established at app startup, no need to reconnect
   const [totalSignups, totalLandlords, totalFarmers] = await Promise.all([
     Signup.countDocuments(),
     Landlord.countDocuments(),
@@ -170,8 +165,7 @@ const getStats = async () => {
  * @returns {Promise<Object>} Token and admin data
  */
 const loginAdmin = async (email, password) => {
-  await connectDB();
-  
+  // Connection is already established at app startup, no need to reconnect
   const admin = await Admin.findOne({ email });
   
   if (!admin) {

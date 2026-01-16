@@ -11,17 +11,6 @@ const createLandlord = async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
   
-  // Ensure MongoDB connection before proceeding
-  try {
-    const { connectDB } = require('../config/database');
-    await connectDB();
-  } catch (err) {
-    console.error('Failed to connect to MongoDB:', err);
-    return res.status(503).json({ 
-      error: 'Database connection unavailable. Please try again later.' 
-    });
-  }
-  
   try {
     const result = await landlordService.createLandlord({
       county,

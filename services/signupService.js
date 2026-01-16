@@ -1,5 +1,4 @@
 const Signup = require('../models/Signup');
-const { connectDB } = require('../config/database');
 
 /**
  * Create a new newsletter signup
@@ -7,8 +6,7 @@ const { connectDB } = require('../config/database');
  * @returns {Promise<Object>} Success message
  */
 const createSignup = async (email) => {
-  await connectDB();
-  
+  // Connection is already established at app startup, no need to reconnect
   // Check if email already exists
   const existingSignup = await Signup.findOne({ email });
   if (existingSignup) {

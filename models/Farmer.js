@@ -7,4 +7,7 @@ const farmerSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// Add index on created_at for faster sorting queries
+farmerSchema.index({ created_at: -1 });
+
 module.exports = mongoose.model('Farmer', farmerSchema);

@@ -1,5 +1,4 @@
 const Landlord = require('../models/Landlord');
-const { connectDB } = require('../config/database');
 
 /**
  * Create a new landlord post
@@ -7,8 +6,7 @@ const { connectDB } = require('../config/database');
  * @returns {Promise<Object>} Created landlord
  */
 const createLandlord = async (landlordData) => {
-  await connectDB();
-  
+  // Connection is already established at app startup, no need to reconnect
   const landlord = new Landlord({
     county: landlordData.county,
     spi: landlordData.spi || null,

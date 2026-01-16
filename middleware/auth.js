@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-const connectDB = require('../config/database').connectDB;
 
 const authenticateAdmin = async (req, res, next) => {
   try {
@@ -15,9 +14,7 @@ const authenticateAdmin = async (req, res, next) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     
-    // Ensure MongoDB connection
-    await connectDB();
-    
+    // JWT verification doesn't require database connection
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
       req.admin = decoded;

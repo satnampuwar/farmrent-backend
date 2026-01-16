@@ -1,7 +1,6 @@
 const Farmer = require('../models/Farmer');
 const Landlord = require('../models/Landlord');
 const nodemailer = require('nodemailer');
-const { connectDB } = require('../config/database');
 
 // Brevo (Sendinblue) Email Configuration
 const transporter = nodemailer.createTransport({
@@ -20,8 +19,7 @@ const transporter = nodemailer.createTransport({
  * @returns {Promise<Object>} Created farmer and match count
  */
 const createFarmer = async (farmerData) => {
-  await connectDB();
-  
+  // Connection is already established at app startup, no need to reconnect
   const farmer = new Farmer({
     county: farmerData.county,
     offered_price: farmerData.offered_price,

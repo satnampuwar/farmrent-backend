@@ -20,11 +20,11 @@ const connectDB = async () => {
 
   try {
     cachedConnection = await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 10000, // 10 seconds timeout for server selection (shorter for serverless)
+      serverSelectionTimeoutMS: 5000, // 5 seconds timeout for server selection
       socketTimeoutMS: 45000, // 45 seconds timeout for socket operations
-      connectTimeoutMS: 10000, // 10 seconds timeout for initial connection
-      maxPoolSize: 1, // Reduced pool size for serverless (1 connection per function)
-      minPoolSize: 0, // No minimum pool for serverless
+      connectTimeoutMS: 5000, // 5 seconds timeout for initial connection
+      maxPoolSize: 10, // Increased pool size for better performance
+      minPoolSize: 2, // Keep minimum connections alive for faster response
       retryWrites: true,
       w: 'majority'
     });

@@ -9,4 +9,8 @@ const landlordSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// Add indexes for faster queries
+landlordSchema.index({ created_at: -1 });
+landlordSchema.index({ county: 1, asking_price: 1 }); // For matching queries in farmerService
+
 module.exports = mongoose.model('Landlord', landlordSchema);

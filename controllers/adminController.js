@@ -14,17 +14,6 @@ const login = async (req, res) => {
   }
   
   try {
-    const { connectDB } = require('../config/database');
-    await connectDB();
-  } catch (err) {
-    console.error('Failed to connect to MongoDB:', err);
-    return res.status(503).json({ 
-      success: false,
-      error: 'Database connection unavailable. Please try again later.' 
-    });
-  }
-  
-  try {
     const result = await adminService.loginAdmin(email, password);
     res.json({
       success: true,
